@@ -9,10 +9,12 @@ const middleware_1 = require("./middleware");
 const config_1 = require("./config/config");
 const connction_db_1 = __importDefault(require("./DB/connction.db"));
 const services_1 = require("./common/services");
+const cors_1 = __importDefault(require("cors"));
 const bootstrap = async () => {
     const app = (0, express_1.default)();
-    app.use(express_1.default.json());
+    app.use(express_1.default.json(), (0, cors_1.default)());
     app.use("/auth", modules_1.authRouter);
+    app.use("/user", modules_1.userRouter);
     app.use(middleware_1.globalErrorHandler);
     app.get("/", (req, res, next) => {
         res.status(200).json({ message: "Landing Page............." });

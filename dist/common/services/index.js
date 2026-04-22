@@ -16,3 +16,4 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 __exportStar(require("./security.service"), exports);
 __exportStar(require("./redis.service"), exports);
+__exportStar(require("./token.service"), exports);

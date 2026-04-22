@@ -42,13 +42,12 @@ const response_1 = require("../../common/response");
 const validators = __importStar(require("./auth.validation"));
 const middleware_1 = require("../../middleware");
 const router = (0, express_1.Router)();
-router.post("/login", async (req, res, next) => {
+router.post("/login", (0, middleware_1.validation)(validators.loginSchema), async (req, res, next) => {
     try {
-        const data = await auth_service_1.default.login(req.body);
+        const data = await auth_service_1.default.login(req.body, `${req.protocol}://${req.get("host")}`);
         (0, response_1.successResponse)({
             res,
-            message: "Login successful",
-            data: data.user,
+            data,
         });
     }
     catch (error) {
@@ -87,6 +86,33 @@ router.patch("/resend-confirm-email", (0, middleware_1.validation)(validators.re
         (0, response_1.successResponse)({
             res,
             data: account,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.post("/signup/gmail", async (req, res, next) => {
+    try {
+        const result = await auth_service_1.default.signupWithGmail(req.body, `${req.protocol}://${req.get("host")}`);
+        (0, response_1.successResponse)({
+            res,
+            status: 201,
+            message: "Gmail signup successful",
+            data: result,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.post("/login/gmail", async (req, res, next) => {
+    try {
+        const result = await auth_service_1.default.loginWithGmail(req.body, `${req.protocol}://${req.get("host")}`);
+        (0, response_1.successResponse)({
+            res,
+            message: "Gmail login successful",
+            data: result,
         });
     }
     catch (error) {

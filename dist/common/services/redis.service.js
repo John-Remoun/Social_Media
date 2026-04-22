@@ -186,7 +186,7 @@ class RedisService {
     }
     async deleteKey(key) {
         try {
-            if (!key)
+            if (!key || (Array.isArray(key) && key.length === 0))
                 return 0;
             return await this.client.del(key);
         }

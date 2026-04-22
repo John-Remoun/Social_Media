@@ -5,4 +5,5 @@ var EmailEnum;
 (function (EmailEnum) {
     EmailEnum["CONFIRM_EMAIL"] = "Confirm_Email";
     EmailEnum["FORGOT_PASSWORD"] = "ForgotPassword";
+    EmailEnum["RESET_PASSWORD"] = "ResetPassword";
 })(EmailEnum || (exports.EmailEnum = EmailEnum = {}));
