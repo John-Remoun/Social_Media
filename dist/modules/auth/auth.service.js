@@ -6,8 +6,10 @@ const hash_security_1 = require("../../common/utils/security/hash.security");
 const encryption_security_1 = require("../../common/utils/security/encryption.security");
 const repository_1 = require("../../DB/repository");
 const redis_service_1 = require("../../common/services/redis.service");
-const token_service_1 = require("../../common/services/token.service");
 const Enums_1 = require("../../common/Enums");
+const services_1 = require("../../common/services");
+const google_auth_library_1 = require("google-auth-library");
+const config_1 = require("../../config/config");
 class AuthenticationService {
     userRepository;
     redis;
@@ -15,43 +17,33 @@ class AuthenticationService {
     constructor() {
         this.userRepository = new repository_1.UserRepository();
         this.redis = redis_service_1.redisService;
-        this.tokens = token_service_1.tokenService;
+        this.tokens = new services_1.tokenService();
     }
-    async login(data, issuer) {
-        const { email, password } = data;
+    async login(inputs, issuer) {
+        const { email, password } = inputs;
         const user = await this.userRepository.findOne({
             filter: {
                 email,
                 provider: Enums_1.ProviderEnum.SYSTEM,
-                confirmEmail: { $exists: true }
             },
         });
         if (!user) {
             throw new exceptions_1.NotFoundException("Invalid credentials");
+        }
+        if (!user.confirmEmail) {
+            throw new exceptions_1.UnauthorizedException("Please confirm your email first");
         }
         if (!user.password) {
             throw new exceptions_1.UnauthorizedException("This account uses Google login. Please sign in with Google.");
         }
         const isMatch = await (0, hash_security_1.compareHash)({
             plaintext: password,
-            hash: user.password,
+            cipherText: user.password,
         });
         if (!isMatch) {
-            throw new exceptions_1.UnauthorizedException("Invalid credentials");
+            throw new exceptions_1.NotFoundException("Invalid credentials");
         }
-        if (!user.isConfirmed) {
-            throw new exceptions_1.UnauthorizedException("Please confirm your email before logging in");
-        }
-        const tokenPair = this.tokens.generateTokens({
-            sub: user._id.toString(),
-            email: user.email,
-            role: user.role,
-        });
-        await this.tokens.storeRefreshToken(user._id.toString(), tokenPair.refreshToken);
-        return {
-            ...tokenPair,
-            user: this.sanitizeUser(user),
-        };
+        return await this.tokens.createLoginCredentials(user, issuer);
     }
     async signup(data) {
         const exists = await this.findUserByEmail(data.email);
@@ -70,17 +62,21 @@ class AuthenticationService {
         return user;
     }
     async confirmEmail({ email, otp }) {
-        const hashotp = await this.redis.get(this.redis.otpKey({ email, type: Enums_1.EmailEnum.CONFIRM_EMAIL }));
-        if (!hashotp) {
+        const hashOtp = await this.redis.get(this.redis.otpKey({ email, type: Enums_1.EmailEnum.CONFIRM_EMAIL }));
+        if (!hashOtp) {
             throw new exceptions_1.NotFoundException("OTP expired or invalid");
         }
-        const account = await this.userRepository.findOne({
-            filter: { email, confirmEmail: { $exists: false }, provider: Enums_1.ProviderEnum.SYSTEM },
-        });
+        const account = (await this.userRepository.findOne({
+            filter: {
+                email,
+                confirmEmail: { $exists: false },
+                provider: Enums_1.ProviderEnum.SYSTEM,
+            },
+        }));
         if (!account) {
             throw new exceptions_1.NotFoundException("Account not found or already confirmed");
         }
-        if (await (0, hash_security_1.compareHash)({ plaintext: otp, cipherText: hashotp })) {
+        if (!(await (0, hash_security_1.compareHash)({ plaintext: otp, cipherText: hashOtp }))) {
             throw new exceptions_1.ConflictException("Invalid OTP");
         }
         account.confirmEmail = new Date();
@@ -90,7 +86,11 @@ class AuthenticationService {
     }
     async reSendConfirmEmail({ email }) {
         const account = await this.userRepository.findOne({
-            filter: { email, confirmEmail: { $exists: false }, provider: Enums_1.ProviderEnum.SYSTEM },
+            filter: {
+                email,
+                confirmEmail: { $exists: false },
+                provider: Enums_1.ProviderEnum.SYSTEM,
+            },
         });
         if (!account) {
             throw new exceptions_1.NotFoundException("Account not found or already confirmed");
@@ -102,64 +102,105 @@ class AuthenticationService {
         });
         return { message: "OTP resent successfully" };
     }
-    async logout(userId, accessToken) {
-        await this.tokens.revokeRefreshToken(userId);
-        try {
-            const payload = this.tokens.verifyAccessToken(accessToken);
-            const now = Math.floor(Date.now() / 1000);
-            const remainingTTL = (payload.exp ?? now) - now;
-            if (remainingTTL > 0) {
-                await this.tokens.revokeAccessToken(userId, payload.jti, remainingTTL);
-            }
-        }
-        catch {
-        }
-        return { message: "Logged out successfully" };
-    }
-    async refreshTokens(incomingRefreshToken) {
-        const payload = this.tokens.verifyRefreshToken(incomingRefreshToken);
-        const isValid = await this.tokens.validateStoredRefreshToken(payload.sub, incomingRefreshToken);
-        if (!isValid) {
-            await this.tokens.revokeRefreshToken(payload.sub);
-            throw new exceptions_1.UnauthorizedException("Refresh token reuse detected. Please log in again.");
-        }
-        const newPair = this.tokens.generateTokens({
-            sub: payload.sub,
-            email: payload.email,
-            role: payload.role,
+    async verifyGoogleAccount(idToken) {
+        const client = new google_auth_library_1.OAuth2Client();
+        const ticket = await client.verifyIdToken({
+            idToken,
+            audience: config_1.CLIENT_IDS,
         });
-        await this.tokens.storeRefreshToken(payload.sub, newPair.refreshToken);
-        return newPair;
+        const payload = ticket.getPayload();
+        if (!payload?.email_verified) {
+            throw new exceptions_1.BadRequestException("Fail to verify this account with Google");
+        }
+        return payload;
     }
-    async googleAuth(googleUser) {
-        let user = await this.userRepository.findOne({
-            filter: { email: googleUser.email },
-            options: { lean: false },
+    async loginWithGmail(idToken, issuer) {
+        const payload = await this.verifyGoogleAccount(idToken);
+        const user = await this.userRepository.findOne({
+            filter: {
+                email: payload.email,
+                provider: Enums_1.ProviderEnum.GOOGLE,
+            },
         });
         if (!user) {
-            user = await this.userRepository.createOne({
-                data: {
-                    ...googleUser,
-                    provider: "google",
-                    isConfirmed: true,
-                    ConfirmEmail: new Date(),
-                    role: "user",
-                },
-            });
+            throw new exceptions_1.NotFoundException("Invalid login data");
         }
-        else if (!user.googleId) {
-            await this.userRepository.updateOne({
-                filter: { email: googleUser.email },
-                update: { googleId: googleUser.googleId, isConfirmed: true },
-            });
-        }
-        const tokenPair = this.tokens.generateTokens({
-            sub: user._id.toString(),
-            email: user.email,
-            role: user.role,
+        return await this.tokens.createLoginCredentials(user, issuer);
+    }
+    async signupWithGmail(idToken, issuer) {
+        const payload = await this.verifyGoogleAccount(idToken);
+        const checkUserExist = await this.userRepository.findOne({
+            filter: {
+                email: payload.email,
+            },
         });
-        await this.tokens.storeRefreshToken(user._id.toString(), tokenPair.refreshToken);
-        return { ...tokenPair, user: this.sanitizeUser(user) };
+        if (checkUserExist) {
+            if (checkUserExist?.provider == Enums_1.ProviderEnum.SYSTEM) {
+                throw new exceptions_1.ConflictException("Account already exist with different provider");
+            }
+            const account = await this.loginWithGmail(idToken, issuer);
+            return { account, status: 200 };
+        }
+        const user = await this.userRepository.createOne({
+            data: {
+                firstName: payload.given_name,
+                lastName: payload.family_name,
+                email: payload.email,
+                profilePicture: payload.picture,
+                provider: Enums_1.ProviderEnum.GOOGLE,
+                confirmEmail: new Date(),
+            },
+        });
+        return {
+            status: 201,
+            Credential: await this.tokens.createLoginCredentials(user, issuer),
+        };
+    }
+    async forgotPassword({ email }) {
+        const user = await this.userRepository.findOne({
+            filter: {
+                email,
+                provider: Enums_1.ProviderEnum.SYSTEM,
+            },
+        });
+        if (!user) {
+            throw new exceptions_1.NotFoundException("User not found");
+        }
+        await this.redis.sendEmailOtp({
+            email,
+            subject: Enums_1.EmailEnum.FORGOT_PASSWORD,
+            title: "Forget Password",
+        });
+        return { message: "Reset password OTP sent successfully" };
+    }
+    async resetPassword({ email, otp, password }) {
+        const hashOtp = await this.redis.get(this.redis.otpKey({ email, type: Enums_1.EmailEnum.RESET_PASSWORD }));
+        if (!hashOtp) {
+            throw new exceptions_1.NotFoundException("OTP expired or invalid");
+        }
+        const user = (await this.userRepository.findOne({
+            filter: {
+                email,
+                provider: Enums_1.ProviderEnum.SYSTEM,
+            },
+        }));
+        if (!user) {
+            throw new exceptions_1.NotFoundException("User not found");
+        }
+        const isValidOtp = await (0, hash_security_1.compareHash)({
+            plaintext: otp,
+            cipherText: hashOtp,
+        });
+        if (!isValidOtp) {
+            throw new exceptions_1.ConflictException("Invalid OTP");
+        }
+        const hashedPassword = await (0, hash_security_1.generateHash)({
+            plaintext: password,
+        });
+        user.password = hashedPassword;
+        await user.save();
+        await this.redis.deleteKey(this.redis.otpKey({ email, type: Enums_1.EmailEnum.RESET_PASSWORD }));
+        return { message: "Password reset successfully" };
     }
     async findUserByEmail(email) {
         return this.userRepository.findOne({
@@ -181,12 +222,6 @@ class AuthenticationService {
             phone: data.phone ? await (0, encryption_security_1.generateEncryption)(data.phone) : undefined,
             password: await (0, hash_security_1.generateHash)({ plaintext: data.password }),
         };
-    }
-    sanitizeUser(user) {
-        const obj = user?.toObject ? user.toObject() : { ...user };
-        delete obj.password;
-        delete obj.__v;
-        return obj;
     }
     async deleteUsers(filter, options) {
         return this.userRepository.deleteMany({ filter, options });

@@ -55,31 +55,34 @@ export class AuthenticationService {
     const { email, password } = inputs;
 
     const user = await this.userRepository.findOne({
-      filter: {
-        email,
-        provider: ProviderEnum.SYSTEM,
-        confirmEmail: true,
-      },
-    });
+  filter: {
+    email,
+    provider: ProviderEnum.SYSTEM,
+  },
+});
 
-    if (!user) {
-      throw new NotFoundException("Invalid credentials");
-    }
+if (!user) {
+  throw new NotFoundException("Invalid credentials");
+}
 
-    if (!user.password) {
-      throw new UnauthorizedException(
-        "This account uses Google login. Please sign in with Google.",
-      );
-    }
+if (!user.confirmEmail) {
+  throw new UnauthorizedException("Please confirm your email first");
+}
 
-    const isMatch = await compareHash({
-      plaintext: password,
-      cipherText: user.password,
-    });
+if (!user.password) {
+  throw new UnauthorizedException(
+    "This account uses Google login. Please sign in with Google.",
+  );
+}
 
-    if (!isMatch) {
-      throw new NotFoundException("Invalid credentials");
-    }
+const isMatch = await compareHash({
+  plaintext: password,
+  cipherText: user.password,
+});
+
+if (!isMatch) {
+  throw new NotFoundException("Invalid credentials");
+}
 
     return await this.tokens.createLoginCredentials(
       user as unknown as HydratedDocument<IUser>,

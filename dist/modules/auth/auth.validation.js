@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.signupSchema = exports.loginSchema = exports.confirmEmailSchema = exports.reSendConfirmEmailSchema = void 0;
+exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.signupSchema = exports.loginSchema = exports.confirmEmailSchema = exports.reSendConfirmEmailSchema = void 0;
 const zod_1 = require("zod");
 const validation_1 = require("../../common/validation");
 exports.reSendConfirmEmailSchema = {
@@ -26,6 +26,20 @@ exports.signupSchema = {
     }).refine((data) => {
         return data.password === data.confirmPassword;
     }, {
+        error: "password mismatch with confirm password",
+    }),
+};
+exports.forgotPasswordSchema = {
+    body: zod_1.z.strictObject({
+        email: validation_1.generalValidation.email,
+    }),
+};
+exports.resetPasswordSchema = {
+    body: exports.forgotPasswordSchema.body.safeExtend({
+        otp: validation_1.generalValidation.otp,
+        password: validation_1.generalValidation.password,
+        confirmPassword: validation_1.generalValidation.confirmPassword,
+    }).refine((data) => data.password === data.confirmPassword, {
         error: "password mismatch with confirm password",
     }),
 };
