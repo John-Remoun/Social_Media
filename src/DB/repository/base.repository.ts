@@ -4,17 +4,16 @@ import {
   DeleteResult,
   HydratedDocument,
   Model,
+  PopulateOptions,
   ProjectionType,
+  QueryFilter,
   QueryOptions,
   UpdateQuery,
   UpdateResult,
 } from "mongoose";
 
 export abstract class DatabaseRepository<TRawDoc> {
-
-  constructor(protected readonly model: Model<TRawDoc>) {
-    
-  }
+  constructor(protected readonly model: Model<TRawDoc>) {}
 
   async create({
     data,
@@ -40,6 +39,16 @@ export abstract class DatabaseRepository<TRawDoc> {
     return await this.model.create(data as any, options);
   }
 
+  async insertMany({
+    data,
+  }: {
+    data: AnyKeys<TRawDoc>[];
+  }): Promise<HydratedDocument<TRawDoc>[]> {
+    return (await this.model.create(
+      data as any,
+    )) as HydratedDocument<TRawDoc>[];
+  }
+
   async createOne({
     data,
     options,
@@ -63,6 +72,28 @@ export abstract class DatabaseRepository<TRawDoc> {
     options?: QueryOptions<TRawDoc> | null | undefined;
   }): Promise<TRawDoc | null> {
     return await this.model.findOne(filter, projection, options).exec();
+  }
+
+  async find({
+    filter,
+    projection,
+    options,
+  }: {
+    filter?: QueryFilter<TRawDoc>;
+    projection?: ProjectionType<TRawDoc> | null | undefined;
+    options?: QueryOptions<TRawDoc> | null | undefined;
+  }): Promise<HydratedDocument<TRawDoc>[]> {
+    const doc = this.model.find(filter, projection);
+
+    if (options?.populate) {
+      doc.populate(options.populate as PopulateOptions[]);
+    }
+
+    if (options?.lean) {
+      doc.lean(options.lean);
+    }
+
+    return await doc.exec();
   }
 
   async findById({

@@ -9,11 +9,24 @@ class DatabaseRepository {
     async create({ data, options, }) {
         return await this.model.create(data, options);
     }
+    async insertMany({ data, }) {
+        return (await this.model.create(data));
+    }
     async createOne({ data, options, }) {
         return (await this.model.create(data, options));
     }
     async findOne({ filter, projection, options, }) {
         return await this.model.findOne(filter, projection, options).exec();
+    }
+    async find({ filter, projection, options, }) {
+        const doc = this.model.find(filter, projection);
+        if (options?.populate) {
+            doc.populate(options.populate);
+        }
+        if (options?.lean) {
+            doc.lean(options.lean);
+        }
+        return await doc.exec();
     }
     async findById({ id, projection, options, }) {
         return await this.model.findById(id, projection, options).exec();
