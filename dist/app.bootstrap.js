@@ -15,6 +15,10 @@ const bootstrap = async () => {
     app.use(express_1.default.json(), (0, cors_1.default)());
     app.use("/auth", modules_1.authRouter);
     app.use("/user", modules_1.userRouter);
+    app.use("/post", modules_1.postRouter);
+    app.use("/comment", modules_1.commentRouter);
+    app.use("/story", modules_1.storyRouter);
+    app.use("/notification", modules_1.notificationRouter);
     app.use(middleware_1.globalErrorHandler);
     app.get("/", (req, res, next) => {
         res.status(200).json({ message: "Landing Page............." });

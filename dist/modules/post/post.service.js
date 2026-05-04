@@ -1,0 +1,201 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PostService = void 0;
+const mongoose_1 = require("mongoose");
+const Enums_1 = require("../../common/Enums");
+const exceptions_1 = require("../../common/exceptions");
+const repository_1 = require("../../DB/repository");
+class PostService {
+    postRepository;
+    commentRepository;
+    notificationRepository;
+    storyRepository;
+    constructor() {
+        this.postRepository = new repository_1.PostRepository();
+        this.commentRepository = new repository_1.CommentRepository();
+        this.notificationRepository = new repository_1.NotificationRepository();
+        this.storyRepository = new repository_1.StoryRepository();
+    }
+    async createPost(data, user) {
+        const payload = {
+            ...data,
+            createdBy: user._id,
+            availability: data.availability ?? Enums_1.AvailabilityEnum.PUBLIC,
+            reactions: [],
+        };
+        return this.postRepository.createOne({ data: payload });
+    }
+    async listPosts() {
+        return this.postRepository.find({
+            filter: { deletedAt: null },
+            options: {
+                lean: true,
+                sort: { createdAt: -1 },
+                populate: [
+                    { path: "createdBy", select: "firstName lastName profilePicture" },
+                    { path: "likes", select: "firstName lastName profilePicture" },
+                    { path: "tags", select: "firstName lastName profilePicture" },
+                ],
+            },
+        });
+    }
+    async listFeed(user) {
+        return this.postRepository.find({
+            filter: { deletedAt: null },
+            options: {
+                lean: true,
+                sort: { createdAt: -1 },
+                populate: [
+                    { path: "createdBy", select: "firstName lastName profilePicture" },
+                    { path: "likes", select: "firstName lastName profilePicture" },
+                    { path: "tags", select: "firstName lastName profilePicture" },
+                ],
+            },
+        });
+    }
+    async listUserPostsById(userId) {
+        return this.postRepository.find({
+            filter: { createdBy: userId, deletedAt: null },
+            options: {
+                lean: true,
+                sort: { createdAt: -1 },
+            },
+        });
+    }
+    async listUserPosts(user) {
+        return this.postRepository.find({
+            filter: { createdBy: user._id, deletedAt: null },
+            options: {
+                lean: true,
+                sort: { createdAt: -1 },
+            },
+        });
+    }
+    async getPostById(id) {
+        const post = await this.postRepository.findById({
+            id,
+            options: {
+                populate: [
+                    { path: "createdBy", select: "firstName lastName profilePicture" },
+                    { path: "likes", select: "firstName lastName profilePicture" },
+                    { path: "tags", select: "firstName lastName profilePicture" },
+                ],
+            },
+        });
+        if (!post || post.deletedAt) {
+            throw new exceptions_1.NotFoundException("Post not found");
+        }
+        return post;
+    }
+    async updatePost(id, data, user) {
+        if (Object.keys(data).length === 0) {
+            throw new exceptions_1.BadRequestException("No data provided to update");
+        }
+        const post = await this.postRepository.findById({ id });
+        if (!post || post.deletedAt) {
+            throw new exceptions_1.NotFoundException("Post not found");
+        }
+        const ownerId = post.createdBy.toString();
+        if (ownerId !== user._id.toString()) {
+            throw new exceptions_1.ForbiddenException("You are not allowed to update this post");
+        }
+        const updated = await this.postRepository.updateOne({
+            filter: { _id: id },
+            update: {
+                ...data,
+                updatedBy: user._id,
+            },
+        });
+        if (!updated) {
+            throw new exceptions_1.NotFoundException("Failed to update post");
+        }
+        return updated;
+    }
+    async deletePost(id, user) {
+        const post = await this.postRepository.findById({ id });
+        if (!post || post.deletedAt) {
+            throw new exceptions_1.NotFoundException("Post not found");
+        }
+        const ownerId = post.createdBy.toString();
+        if (ownerId !== user._id.toString()) {
+            throw new exceptions_1.ForbiddenException("You are not allowed to delete this post");
+        }
+        const deleted = await this.postRepository.updateOne({
+            filter: { _id: id },
+            update: { deletedAt: new Date() },
+        });
+        if (!deleted) {
+            throw new exceptions_1.NotFoundException("Failed to delete post");
+        }
+        return deleted;
+    }
+    async Like(id, user) {
+        const post = await this.postRepository.findById({ id });
+        if (!post || post.deletedAt) {
+            throw new exceptions_1.NotFoundException("Post not found");
+        }
+        const userId = user._id.toString();
+        const likes = (post.likes || []).map((like) => like.toString());
+        const liked = likes.includes(userId);
+        const updatedLikes = liked
+            ? likes.filter((like) => like !== userId)
+            : [...likes, userId].map((value) => new mongoose_1.Types.ObjectId(value));
+        const updated = await this.postRepository.updateOne({
+            filter: { _id: id },
+            update: {
+                likes: updatedLikes,
+            },
+        });
+        if (!updated) {
+            throw new exceptions_1.NotFoundException("Failed to update likes");
+        }
+        return updated;
+    }
+    async Reaction(id, emoji, user) {
+        const post = await this.postRepository.findById({ id });
+        if (!post || post.deletedAt) {
+            throw new exceptions_1.NotFoundException("Post not found");
+        }
+        const existingReactions = (post.reactions || []);
+        const currentUserId = user._id.toString();
+        const updatedReactions = [...existingReactions];
+        const existingIndex = updatedReactions.findIndex((reaction) => reaction.emoji === emoji &&
+            reaction.userId.toString() === currentUserId);
+        if (existingIndex >= 0) {
+            updatedReactions.splice(existingIndex, 1);
+        }
+        else {
+            updatedReactions.push({ emoji, userId: user._id });
+        }
+        const updated = await this.postRepository.updateOne({
+            filter: { _id: id },
+            update: { reactions: updatedReactions },
+        });
+        if (!updated) {
+            throw new exceptions_1.NotFoundException("Failed to update reaction");
+        }
+        return updated;
+    }
+    async dashboard(user) {
+        const postCount = await this.postRepository.countDocuments({
+            filter: { createdBy: user._id, deletedAt: null },
+        });
+        const commentCount = await this.commentRepository.countDocuments({
+            filter: { createdBy: user._id, deletedAt: null },
+        });
+        const unreadNotifications = await this.notificationRepository.countDocuments({
+            filter: { recipientId: user._id, isRead: false, deletedAt: null },
+        });
+        const activeStories = await this.storyRepository.countDocuments({
+            filter: { createdBy: user._id, deletedAt: null },
+        });
+        return {
+            postCount,
+            commentCount,
+            unreadNotifications,
+            activeStories,
+        };
+    }
+}
+exports.PostService = PostService;
+exports.default = new PostService();

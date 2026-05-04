@@ -1,14 +1,14 @@
 import { RedisClientType, createClient } from "redis";
+import { Types } from "mongoose";
 import { REDIS_URI } from "../../config/config";
 import { EmailEnum } from "../Enums";
 import { BadRequestException } from "../exceptions";
 import { sendEmail } from "../utils/email/send.email";
 import { emailTemplate } from "../utils/email/template.email";
-import { generateHash } from "../utils/security/hash.security"; 
+import { generateHash } from "../utils/security/hash.security";
 
 const createRandomOtp = (): number =>
   Math.floor(100000 + Math.random() * 900000);
-
 
 // type for key generators
 type KeyType = {
@@ -24,8 +24,6 @@ type SetType = {
   ttl?: number;
 };
 
-
-
 export class RedisService {
   private readonly client: RedisClientType;
 
@@ -36,9 +34,11 @@ export class RedisService {
 
   private handleEvents(): void {
     this.client.on("error", (err: Error) =>
-      console.error("Redis not connected ✋", err)
+      console.error("Redis not connected ✋", err),
     );
-    this.client.on("ready", () => console.log("Redis is connected successfully 👌"));
+    this.client.on("ready", () =>
+      console.log("Redis is connected successfully 👌"),
+    );
   }
 
   async connect(): Promise<void> {
@@ -48,7 +48,7 @@ export class RedisService {
     return this.client;
   }
 
-//         OTP operation
+  //         OTP operation
   async sendEmailOtp({
     email,
     subject,
@@ -65,16 +65,14 @@ export class RedisService {
     // check block
     const isBlockedTTL = await this.ttl(blockKey);
     if (isBlockedTTL > 0) {
-      throw new BadRequestException(
-        `Try again after ${isBlockedTTL} seconds`
-      );
+      throw new BadRequestException(`Try again after ${isBlockedTTL} seconds`);
     }
 
     // check existing otp
     const remainingOtpTTL = await this.ttl(otpKey);
     if (remainingOtpTTL > 0) {
       throw new BadRequestException(
-        `OTP still active, try again after ${remainingOtpTTL} seconds`
+        `OTP still active, try again after ${remainingOtpTTL} seconds`,
       );
     }
 
@@ -105,7 +103,7 @@ export class RedisService {
     console.log(`OTP for ${email}: ${code}`);
   }
 
-//         key generators
+  //         key generators
 
   baseRevokeTokenKey(userId?: string): string {
     return `RevokeToken::${userId}`;
@@ -137,13 +135,12 @@ export class RedisService {
     return `ForgotPasswordLink::User::${userId}`;
   }
 
-//         operations
+  //         operations
 
   async set({ key, value, ttl }: SetType = {}): Promise<string | null> {
     try {
       if (!key) return null;
-      const data =
-        typeof value === "string" ? value : JSON.stringify(value);
+      const data = typeof value === "string" ? value : JSON.stringify(value);
       if (ttl !== undefined) {
         return await this.client.set(key, data, { EX: ttl });
       }
@@ -154,12 +151,18 @@ export class RedisService {
     }
   }
 
-  async update({ key, value, ttl }: SetType = {}): Promise<string | number | null> {
+  async update({ key, value, ttl }: SetType = {}): Promise<
+    string | number | null
+  > {
     try {
       if (!key) return null;
       const exists = await this.client.exists(key);
       if (!exists) return 0;
-      return await this.set({ key, value, ...(ttl !== undefined ? { ttl } : {}) });
+      return await this.set({
+        key,
+        value,
+        ...(ttl !== undefined ? { ttl } : {}),
+      });
     } catch (error) {
       console.log(`Redis update error: ${error}`);
       return null;
@@ -232,15 +235,50 @@ export class RedisService {
     }
   }
 
-async deleteKey(key: string | string[]): Promise<number> {
-  try {
-    if (!key || (Array.isArray(key) && key.length === 0)) return 0;
+  async deleteKey(key: string | string[]): Promise<number> {
+    try {
+      if (!key || (Array.isArray(key) && key.length === 0)) return 0;
 
-    return await this.client.del(key);
-  } catch {
-    return 0;
+      return await this.client.del(key);
+    } catch {
+      return 0;
+    }
   }
-}
+
+  FCM_key(userId: Types.ObjectId | string) {
+    return `user:FCM:${userId.toString()}`;
+  }
+
+  async addFCM(userId: Types.ObjectId | string, FCMToken: string) {
+    return await this.client.sAdd(this.FCM_key(userId), FCMToken);
+  }
+
+  async removeFCM(userId: Types.ObjectId | string, FCMToken: string) {
+    return await this.client.sRem(this.FCM_key(userId), FCMToken);
+  }
+
+  async getFCMs(userId: Types.ObjectId | string) {
+    return await this.client.sMembers(this.FCM_key(userId));
+  }
+
+  async getAllFCMTokens(): Promise<string[]> {
+    const keys = await this.keys("user:FCM:");
+    if (!keys.length) return [];
+    const tokenSet = new Set<string>();
+    for (const key of keys) {
+      const tokens = await this.client.sMembers(key);
+      tokens.forEach((token) => tokenSet.add(token));
+    }
+    return Array.from(tokenSet);
+  }
+
+  async hasFCMs(userId: Types.ObjectId | string) {
+    return await this.client.sCard(this.FCM_key(userId));
+  }
+
+  async removeFCMUser(userId: Types.ObjectId | string) {
+    return await this.client.del(this.FCM_key(userId));
+  }
 }
 
 export const redisService = new RedisService();

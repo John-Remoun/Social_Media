@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthenticationService = void 0;
 const exceptions_1 = require("../../common/exceptions");
 const hash_security_1 = require("../../common/utils/security/hash.security");
-const encryption_security_1 = require("../../common/utils/security/encryption.security");
 const repository_1 = require("../../DB/repository");
 const redis_service_1 = require("../../common/services/redis.service");
 const Enums_1 = require("../../common/Enums");
@@ -14,17 +13,19 @@ class AuthenticationService {
     userRepository;
     redis;
     tokens;
+    notification;
     constructor() {
         this.userRepository = new repository_1.UserRepository();
         this.redis = redis_service_1.redisService;
         this.tokens = new services_1.tokenService();
+        this.notification = new services_1.NotificationService();
     }
     async login(inputs, issuer) {
-        const { email, password } = inputs;
+        const { email, password, FCM } = inputs;
         const user = await this.userRepository.findOne({
             filter: {
                 email,
-                provider: Enums_1.ProviderEnum.SYSTEM,
+                provider: Enums_1.ProviderEnum.SYSTEM
             },
         });
         if (!user) {
@@ -36,12 +37,26 @@ class AuthenticationService {
         if (!user.password) {
             throw new exceptions_1.UnauthorizedException("This account uses Google login. Please sign in with Google.");
         }
+        if (FCM) {
+            const userId = user._id.toString();
+            await this.redis.addFCM(userId, FCM);
+            const tokens = await this.redis.getFCMs(userId);
+            if (tokens?.length) {
+                await this.notification.sendNotifications({
+                    tokens,
+                    data: {
+                        title: "Login",
+                        body: `New Login at ${new Date()}`,
+                    },
+                });
+            }
+        }
         const isMatch = await (0, hash_security_1.compareHash)({
             plaintext: password,
             cipherText: user.password,
         });
         if (!isMatch) {
-            throw new exceptions_1.NotFoundException("Invalid credentials");
+            throw new exceptions_1.NotFoundException("Invalid credentials........");
         }
         return await this.tokens.createLoginCredentials(user, issuer);
     }
@@ -168,8 +183,8 @@ class AuthenticationService {
         }
         await this.redis.sendEmailOtp({
             email,
-            subject: Enums_1.EmailEnum.FORGOT_PASSWORD,
-            title: "Forget Password",
+            subject: Enums_1.EmailEnum.RESET_PASSWORD,
+            title: "Reset Password",
         });
         return { message: "Reset password OTP sent successfully" };
     }
@@ -218,9 +233,7 @@ class AuthenticationService {
     }
     async secureUserData(data) {
         return {
-            ...data,
-            phone: data.phone ? await (0, encryption_security_1.generateEncryption)(data.phone) : undefined,
-            password: await (0, hash_security_1.generateHash)({ plaintext: data.password }),
+            ...data
         };
     }
     async deleteUsers(filter, options) {

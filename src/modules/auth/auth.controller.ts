@@ -83,6 +83,40 @@ router.patch(
   },
 );
 
+//     FORGOT PASSWORD
+router.post(
+  "/forgot-password",
+  validation(validators.forgotPasswordSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await authService.forgotPassword(req.body);
+      successResponse({
+        res,
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+//     RESET PASSWORD
+router.patch(
+  "/reset-password",
+  validation(validators.resetPasswordSchema),
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await authService.resetPassword(req.body);
+      successResponse({
+        res,
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 //     SIGNUP WITH GMAIL
 router.post(
   "/signup/gmail",

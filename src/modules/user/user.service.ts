@@ -1,35 +1,187 @@
 import { HydratedDocument } from "mongoose";
+import { Readable } from "node:stream";
+import { promisify } from "node:util";
+import { pipeline } from "node:stream";
 import { IUser } from "../../common/interface";
-import { logoutEnum } from "../../common/Enums";
+import {
+  logoutEnum,
+  StorageApproachEnum,
+  UploadApproachEnum,
+} from "../../common/Enums";
 import {
   redisService,
   RedisService,
+  s3Service,
+  S3Service,
   tokenService,
 } from "../../common/services";
-import { ConflictException } from "../../common/exceptions";
+import {
+  BadRequestException,
+  ConflictException,
+} from "../../common/exceptions";
 import { ACCESS_EXPIRES_IN, REFRESH_EXPIRES_IN } from "../../config/config";
+
+const writePipeLine = promisify(pipeline);
 
 export class UserService {
   private readonly redis: RedisService;
   private readonly tokens: tokenService;
+  private readonly s3: S3Service;
 
   constructor() {
     this.redis = redisService;
     this.tokens = new tokenService();
+    this.s3 = s3Service;
   }
 
-  //  profile
+  // ─── PROFILE ───────────────────────────────────────────────────────────────
+
   async profile(user: HydratedDocument<IUser>): Promise<any> {
     return user.toJSON();
   }
 
-  //  logout
+  // ─── PROFILE IMAGE (pre-signed upload) ────────────────────────────────────
+
+  async profileImage(
+    {
+      ContentType,
+      originalname,
+    }: { ContentType: string; originalname: string },
+    user: HydratedDocument<IUser>,
+  ): Promise<{ user: IUser; url: string }> {
+    const { Key, url } = await this.s3.createPreSignedUploadLink({
+      path: `users/${user._id.toString()}/profile`,
+      ContentType,
+      originalname,
+    });
+
+    user.profilePicture = Key;
+    await user.save();
+
+    return { user: user.toJSON(), url };
+  }
+
+  // ─── PROFILE COVER IMAGES (direct multipart upload) ───────────────────────
+
+  async profileCoverImages(
+    files: Express.Multer.File[],
+    user: HydratedDocument<IUser>,
+  ): Promise<IUser> {
+    if (!files || files.length === 0) {
+      throw new BadRequestException("No files provided");
+    }
+
+    const keys = await this.s3.uploadFiles({
+      files,
+      path: `users/${user._id.toString()}/cover`,
+      storageApproach: StorageApproachEnum.DISK,
+      uploadApproach: UploadApproachEnum.LARGE,
+    });
+
+    user.profileCoverPicture = keys;
+    await user.save();
+
+    return user.toJSON();
+  }
+
+  // ─── GENERIC PRE-SIGNED UPLOAD LINK ───────────────────────────────────────
+
+  async createPresignedUploadLink(
+    {
+      ContentType,
+      originalname,
+      path,
+    }: { ContentType: string; originalname: string; path?: string },
+    user: HydratedDocument<IUser>,
+  ): Promise<{ uploadUrl: string; fileKey: string }> {
+    if (!ContentType || !originalname) {
+      throw new BadRequestException(
+        "ContentType and originalname are required",
+      );
+    }
+
+    const { url, Key } = await this.s3.createPreSignedUploadLink({
+      ContentType,
+      originalname,
+      path: path || `users/${user._id.toString()}/uploads`,
+      expiresIn: 3600, // 1 hour
+    });
+
+    return { uploadUrl: url, fileKey: Key };
+  }
+
+  // ─── STREAM FILE (proxy through server) ───────────────────────────────────
+  // For ACL=private files — the client has no direct S3 access.
+
+  async streamFile(
+    key: string,
+  ): Promise<{ stream: Readable; ContentType: string | undefined }> {
+    if (!key) {
+      throw new BadRequestException("Missing file key");
+    }
+
+    const s3Response = await this.s3.getFile({ Key: key });
+
+    if (!s3Response?.Body) {
+      throw new BadRequestException("File not found or could not be fetched");
+    }
+
+    return {
+      stream: s3Response.Body as Readable,
+      ContentType: s3Response.ContentType,
+    };
+  }
+
+  // Pipe the S3 readable stream directly into an Express response (no buffering).
+  async pipeFileTo(
+    stream: Readable,
+    destination: NodeJS.WritableStream,
+  ): Promise<void> {
+    await writePipeLine(stream, destination);
+  }
+
+  // ─── PRE-SIGNED DOWNLOAD URL ───────────────────────────────────────────────
+
+  async getDownloadUrl(key: string, downloadName?: string): Promise<string> {
+    if (!key) {
+      throw new BadRequestException("Missing file key");
+    }
+
+    return this.s3.createPreSignedDownloadLink({
+      Key: key,
+      expiresIn: 60,
+      ...(downloadName && { downloadName }),
+    });
+  }
+
+  // ─── SOFT DELETE ───────────────────────────────────────────────────────────
+
+  async softDelete(
+    user: HydratedDocument<IUser>,
+    { sub }: { sub: string },
+  ): Promise<void> {
+    if (user.$isDeleted()) {
+      throw new ConflictException("Account is already deleted");
+    }
+
+    user.$isDeleted(true);
+    user.deletedAt = new Date();
+
+    user.changeCredentialsTime = new Date();
+    await user.save();
+
+    await this.redis.deleteKey(
+      await this.redis.keys(this.redis.baseRevokeTokenKey(sub)),
+    );
+  }
+
   async logout(
     { flag }: { flag: logoutEnum },
     user: HydratedDocument<IUser>,
     { jti, iat, sub }: { jti: string; iat: number; sub: string },
   ): Promise<number> {
     let status = 200;
+
     switch (flag) {
       case logoutEnum.ALL:
         user.changeCredentialsTime = new Date();
@@ -38,19 +190,20 @@ export class UserService {
           await this.redis.keys(this.redis.baseRevokeTokenKey(sub)),
         );
         break;
+
       default:
-        (await this.tokens.createRevokeToken({
+        await this.tokens.createRevokeToken({
           userId: sub,
           jti,
           ttl: iat + REFRESH_EXPIRES_IN,
-        }),
-          (status = 201));
+        });
+        status = 201;
         break;
     }
+
     return status;
   }
 
-  //  rotateToken
   async rotateToken(
     user: HydratedDocument<IUser>,
     { jti, iat, sub }: { jti: string; iat: number; sub: string },
@@ -59,13 +212,14 @@ export class UserService {
     if ((iat + ACCESS_EXPIRES_IN) * 1000 >= Date.now() + 30000) {
       throw new ConflictException("Current access token still valid");
     }
+
     await this.tokens.createRevokeToken({
       userId: sub,
       jti,
       ttl: iat + REFRESH_EXPIRES_IN,
     });
 
-    return await this.tokens.createLoginCredentials(user, issuer);
+    return this.tokens.createLoginCredentials(user, issuer);
   }
 }
 

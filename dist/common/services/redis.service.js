@@ -106,7 +106,11 @@ class RedisService {
             const exists = await this.client.exists(key);
             if (!exists)
                 return 0;
-            return await this.set({ key, value, ...(ttl !== undefined ? { ttl } : {}) });
+            return await this.set({
+                key,
+                value,
+                ...(ttl !== undefined ? { ttl } : {}),
+            });
         }
         catch (error) {
             console.log(`Redis update error: ${error}`);
@@ -193,6 +197,35 @@ class RedisService {
         catch {
             return 0;
         }
+    }
+    FCM_key(userId) {
+        return `user:FCM:${userId.toString()}`;
+    }
+    async addFCM(userId, FCMToken) {
+        return await this.client.sAdd(this.FCM_key(userId), FCMToken);
+    }
+    async removeFCM(userId, FCMToken) {
+        return await this.client.sRem(this.FCM_key(userId), FCMToken);
+    }
+    async getFCMs(userId) {
+        return await this.client.sMembers(this.FCM_key(userId));
+    }
+    async getAllFCMTokens() {
+        const keys = await this.keys("user:FCM:");
+        if (!keys.length)
+            return [];
+        const tokenSet = new Set();
+        for (const key of keys) {
+            const tokens = await this.client.sMembers(key);
+            tokens.forEach((token) => tokenSet.add(token));
+        }
+        return Array.from(tokenSet);
+    }
+    async hasFCMs(userId) {
+        return await this.client.sCard(this.FCM_key(userId));
+    }
+    async removeFCMUser(userId) {
+        return await this.client.del(this.FCM_key(userId));
     }
 }
 exports.RedisService = RedisService;

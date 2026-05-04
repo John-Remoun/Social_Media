@@ -51,3 +51,9 @@ export const INSTAGRAM_LINK = process.env.INSTAGRAM_LINK;
 export const TWITTER_LINK = process.env.TWITTER_LINK;
 
 export const ORIGINS = process.env.ORIGINS;
+
+export const S3_REGION = process.env.S3_REGION as string
+export const S3_EXPIRES_IN = parseInt( process.env.S3_EXPIRES_IN || "120");
+export const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME as string
+export const S3_ACCESS_KEY_ID = process.env.S3_ACCESS_KEY_ID as string
+export const S3_ACCESS_SECRET_KEY = process.env.S3_ACCESS_SECRET_KEY as string

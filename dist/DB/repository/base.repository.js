@@ -34,6 +34,9 @@ class DatabaseRepository {
     async findMany({ filter, projection, options, }) {
         return await this.model.find(filter, projection, options).exec();
     }
+    async countDocuments({ filter, options, }) {
+        return await this.model.countDocuments(filter, options).exec();
+    }
     async updateOne({ filter, update, options, }) {
         return (await this.model
             .findOneAndUpdate(filter, update, { new: true, ...options })

@@ -1,20 +1,31 @@
 import express from "express";
 import { Express, Request, Response, NextFunction } from "express";
-import { authRouter, userRouter } from "./modules";
+import {
+  authRouter,
+  userRouter,
+  postRouter,
+  commentRouter,
+  storyRouter,
+  notificationRouter,
+} from "./modules";
 import { globalErrorHandler } from "./middleware";
 import { port } from "./config/config";
 import connectDB from "./DB/connction.db";
 import { redisService } from "./common/services";
-import cors from 'cors'
+import cors from "cors";
 
 const bootstrap = async (): Promise<void> => {
   const app: Express = express();
-  
-  app.use(express.json() , cors());
+
+  app.use(express.json(), cors());
 
   //   Application-Routing
   app.use("/auth", authRouter);
   app.use("/user", userRouter);
+  app.use("/post", postRouter);
+  app.use("/comment", commentRouter);
+  app.use("/story", storyRouter);
+  app.use("/notification", notificationRouter);
 
   //   Error Handling
   app.use(globalErrorHandler);

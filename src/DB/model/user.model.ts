@@ -69,6 +69,22 @@ userSchema
     return `${this.firstName} ${this.lastName}`;
   });
 
+async function cascadeSoftDeleteUserRelated(user: UserDocument) {
+  const now = new Date();
+  await user.model("Post").updateMany(
+    { createdBy: user._id, deletedAt: null },
+    { $set: { deletedAt: now } },
+  );
+  await user.model("Comment").updateMany(
+    { createdBy: user._id, deletedAt: null },
+    { $set: { deletedAt: now } },
+  );
+  await user.model("Notification").updateMany(
+    { $or: [{ recipientId: user._id }, { senderId: user._id }], deletedAt: null },
+    { $set: { deletedAt: now } },
+  );
+}
+
 ///////////////// HOOKS ////////////////////
 
 //  save
@@ -85,6 +101,10 @@ userSchema.pre("save", async function (this: UserDocument) {
   if (this.isModified("firstName") || this.isModified("lastName")) {
     const fullName = `${this.firstName} ${this.lastName}`;
     this.slug = fullName.replaceAll(/\s+/g, "-").toLowerCase();
+  }
+
+  if (this.isModified("deletedAt") && this.deletedAt) {
+    await cascadeSoftDeleteUserRelated(this);
   }
 });
 

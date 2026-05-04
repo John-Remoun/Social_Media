@@ -92,6 +92,30 @@ router.patch("/resend-confirm-email", (0, middleware_1.validation)(validators.re
         next(error);
     }
 });
+router.post("/forgot-password", (0, middleware_1.validation)(validators.forgotPasswordSchema), async (req, res, next) => {
+    try {
+        const data = await auth_service_1.default.forgotPassword(req.body);
+        (0, response_1.successResponse)({
+            res,
+            data,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+router.patch("/reset-password", (0, middleware_1.validation)(validators.resetPasswordSchema), async (req, res, next) => {
+    try {
+        const data = await auth_service_1.default.resetPassword(req.body);
+        (0, response_1.successResponse)({
+            res,
+            data,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
 router.post("/signup/gmail", async (req, res, next) => {
     try {
         const result = await auth_service_1.default.signupWithGmail(req.body, `${req.protocol}://${req.get("host")}`);

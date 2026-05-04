@@ -17,19 +17,18 @@ import {
   generateHash,
   compareHash,
 } from "../../common/utils/security/hash.security";
-import { generateEncryption } from "../../common/utils/security/encryption.security";
+
 import { UserRepository } from "../../DB/repository";
 import {
   redisService,
   RedisService,
 } from "../../common/services/redis.service";
 import { EmailEnum, ProviderEnum } from "../../common/Enums";
-import { tokenService } from "../../common/services";
+import { NotificationService, tokenService } from "../../common/services";
 import { IUser } from "../../common/interface";
 import { ILoginResponse } from "./auth.entity";
 import { OAuth2Client, TokenPayload } from "google-auth-library";
 import { CLIENT_IDS } from "../../config/config";
-
 
 /* ================= TYPES ================= */
 
@@ -39,11 +38,13 @@ export class AuthenticationService {
   private readonly userRepository: UserRepository;
   private readonly redis: RedisService;
   private readonly tokens: tokenService;
+  private readonly notification: NotificationService;
 
   constructor() {
     this.userRepository = new UserRepository();
     this.redis = redisService;
     this.tokens = new tokenService();
+    this.notification = new NotificationService();
   }
 
   //     LOGIN
@@ -52,37 +53,52 @@ export class AuthenticationService {
     inputs: LoginDto,
     issuer: string,
   ): Promise<ILoginResponse> {
-    const { email, password } = inputs;
+    const { email, password, FCM } = inputs;
 
     const user = await this.userRepository.findOne({
-  filter: {
-    email,
-    provider: ProviderEnum.SYSTEM,
-  },
-});
+      filter: {
+        email,
+        provider: ProviderEnum.SYSTEM
+      },
+    });
 
-if (!user) {
-  throw new NotFoundException("Invalid credentials");
-}
+    if (!user) {
+      throw new NotFoundException("Invalid credentials");
+    }
 
-if (!user.confirmEmail) {
-  throw new UnauthorizedException("Please confirm your email first");
-}
+    if (!user.confirmEmail) {
+      throw new UnauthorizedException("Please confirm your email first");
+    }
 
-if (!user.password) {
-  throw new UnauthorizedException(
-    "This account uses Google login. Please sign in with Google.",
-  );
-}
+    if (!user.password) {
+      throw new UnauthorizedException(
+        "This account uses Google login. Please sign in with Google.",
+      );
+    }
 
-const isMatch = await compareHash({
-  plaintext: password,
-  cipherText: user.password,
-});
+    if (FCM) {
+      const userId = user._id.toString();
+      await this.redis.addFCM(userId, FCM);
+      const tokens = await this.redis.getFCMs(userId);
+      if (tokens?.length) {
+        await this.notification.sendNotifications({
+          tokens,
+          data: {
+            title: "Login",
+            body: `New Login at ${new Date()}`,
+          },
+        });
+      }
+    }
 
-if (!isMatch) {
-  throw new NotFoundException("Invalid credentials");
-}
+    const isMatch = await compareHash({
+      plaintext: password,
+      cipherText: user.password,
+    });
+
+    if (!isMatch) {
+      throw new NotFoundException("Invalid credentials........");
+    }
 
     return await this.tokens.createLoginCredentials(
       user as unknown as HydratedDocument<IUser>,
@@ -135,9 +151,9 @@ if (!isMatch) {
       throw new NotFoundException("Account not found or already confirmed");
     }
 
-if (!(await compareHash({ plaintext: otp, cipherText: hashOtp }))) {
-  throw new ConflictException("Invalid OTP");
-}
+    if (!(await compareHash({ plaintext: otp, cipherText: hashOtp }))) {
+      throw new ConflictException("Invalid OTP");
+    }
 
     account.confirmEmail = new Date();
     await account.save();
@@ -256,8 +272,8 @@ if (!(await compareHash({ plaintext: otp, cipherText: hashOtp }))) {
 
     await this.redis.sendEmailOtp({
       email,
-      subject: EmailEnum.FORGOT_PASSWORD,
-      title: "Forget Password",
+      subject: EmailEnum.RESET_PASSWORD,
+      title: "Reset Password",
     });
 
     return { message: "Reset password OTP sent successfully" };
@@ -308,10 +324,6 @@ if (!(await compareHash({ plaintext: otp, cipherText: hashOtp }))) {
     return { message: "Password reset successfully" };
   }
 
-
-
-
-
   /* ================= HELPERS ================= */
 
   public async findUserByEmail(email: string): Promise<IUser | null> {
@@ -334,9 +346,7 @@ if (!(await compareHash({ plaintext: otp, cipherText: hashOtp }))) {
 
   private async secureUserData(data: SignupDto) {
     return {
-      ...data,
-      phone: data.phone ? await generateEncryption(data.phone) : undefined,
-      password: await generateHash({ plaintext: data.password }),
+      ...data
     };
   }
 
@@ -350,7 +360,6 @@ if (!(await compareHash({ plaintext: otp, cipherText: hashOtp }))) {
   private normalizeUser(user: any): IUser {
     return user?.toJSON?.() ?? (user as IUser);
   }
-
 }
 
 export default new AuthenticationService();

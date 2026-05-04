@@ -120,6 +120,16 @@ export abstract class DatabaseRepository<TRawDoc> {
     return await this.model.find(filter, projection, options).exec();
   }
 
+  async countDocuments({
+    filter,
+    options,
+  }: {
+    filter?: Partial<TRawDoc> | Record<string, unknown>;
+    options?: any;
+  }): Promise<number> {
+    return await this.model.countDocuments(filter as any, options).exec();
+  }
+
   async updateOne({
     filter,
     update,
