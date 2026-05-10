@@ -1,0 +1,135 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.profileType = exports.RoleGQLEnumType = exports.ProviderGQLEnumType = exports.GenderGQLEnumType = void 0;
+const graphql_1 = require("graphql");
+const Enums_1 = require("../../../common/Enums");
+exports.GenderGQLEnumType = new graphql_1.GraphQLEnumType({
+    name: "GenderGQLEnumType",
+    values: {
+        Male: {
+            value: Enums_1.GenderEnum.MALE,
+        },
+        Female: {
+            value: Enums_1.GenderEnum.FEMALE,
+        },
+    },
+});
+exports.ProviderGQLEnumType = new graphql_1.GraphQLEnumType({
+    name: "ProviderGQLEnumType",
+    values: {
+        Google: {
+            value: Enums_1.ProviderEnum.GOOGLE,
+        },
+        System: {
+            value: Enums_1.ProviderEnum.SYSTEM,
+        },
+    },
+});
+exports.RoleGQLEnumType = new graphql_1.GraphQLEnumType({
+    name: "RoleGQLEnumType",
+    values: {
+        Admin: {
+            value: Enums_1.RoleEnum.ADMIN,
+        },
+        User: {
+            value: Enums_1.RoleEnum.USER,
+        },
+    },
+});
+exports.profileType = new graphql_1.GraphQLNonNull(new graphql_1.GraphQLObjectType({
+    name: "ProfileResponse",
+    description: "",
+    fields: {
+        message: {
+            type: new graphql_1.GraphQLNonNull(graphql_1.GraphQLString),
+        },
+        data: {
+            type: new graphql_1.GraphQLObjectType({
+                name: "OneUserType",
+                fields: {
+                    _id: {
+                        type: graphql_1.GraphQLID,
+                    },
+                    firstName: {
+                        type: new graphql_1.GraphQLNonNull(graphql_1.GraphQLString),
+                    },
+                    lastName: {
+                        type: new graphql_1.GraphQLNonNull(graphql_1.GraphQLString),
+                    },
+                    slug: {
+                        type: new graphql_1.GraphQLNonNull(graphql_1.GraphQLString),
+                    },
+                    username: {
+                        type: graphql_1.GraphQLString,
+                        resolve: (parent) => {
+                            console.log({ parent });
+                            return parent.username;
+                        }
+                    },
+                    email: {
+                        type: new graphql_1.GraphQLNonNull(graphql_1.GraphQLString),
+                    },
+                    password: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    phone: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    profilePicture: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    profileCoverPictures: {
+                        type: new graphql_1.GraphQLList(graphql_1.GraphQLString),
+                    },
+                    DOB: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    deletedAt: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    restoredAt: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    confirmEmail: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    changeCredentialsTime: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    createdAt: {
+                        type: new graphql_1.GraphQLNonNull(graphql_1.GraphQLString),
+                    },
+                    updatedAt: {
+                        type: graphql_1.GraphQLString,
+                    },
+                    gender: {
+                        type: exports.GenderGQLEnumType,
+                    },
+                    provider: {
+                        type: exports.ProviderGQLEnumType,
+                    },
+                    role: {
+                        type: exports.RoleGQLEnumType,
+                    },
+                    friends: {
+                        type: new graphql_1.GraphQLList(new graphql_1.GraphQLObjectType({
+                            name: "FriendType",
+                            fields: {
+                                _id: { type: graphql_1.GraphQLID },
+                                firstName: {
+                                    type: graphql_1.GraphQLString,
+                                },
+                                lastName: {
+                                    type: graphql_1.GraphQLString,
+                                },
+                                email: {
+                                    type: graphql_1.GraphQLString,
+                                },
+                            },
+                        })),
+                    },
+                },
+            }),
+        },
+    },
+}));

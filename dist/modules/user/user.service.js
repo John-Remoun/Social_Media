@@ -7,18 +7,32 @@ const Enums_1 = require("../../common/Enums");
 const services_1 = require("../../common/services");
 const exceptions_1 = require("../../common/exceptions");
 const config_1 = require("../../config/config");
+const repository_1 = require("../../DB/repository");
 const writePipeLine = (0, node_util_1.promisify)(node_stream_1.pipeline);
 class UserService {
     redis;
     tokens;
     s3;
+    userRepository;
     constructor() {
         this.redis = services_1.redisService;
         this.tokens = new services_1.tokenService();
         this.s3 = services_1.s3Service;
+        this.userRepository = new repository_1.UserRepository();
     }
-    async profile(user) {
-        return user.toJSON();
+    async profile(userId) {
+        const data = (await this.userRepository.findOne({
+            filter: {
+                _id: userId,
+            },
+            options: {
+                populate: [{ path: "friends" }],
+            },
+        }));
+        if (!data) {
+            throw new exceptions_1.BadRequestException("User not found");
+        }
+        return data.toJSON();
     }
     async profileImage({ ContentType, originalname, }, user) {
         const { Key, url } = await this.s3.createPreSignedUploadLink({

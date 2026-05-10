@@ -6,6 +6,16 @@ const Enums_1 = require("../../common/Enums");
 const exceptions_1 = require("../../common/exceptions");
 const repository_1 = require("../../DB/repository");
 class PostService {
+    populate = [
+        { path: "likes" },
+        { path: "createdBy" },
+        { path: "Tags" },
+        { path: "updatedBy" },
+        {
+            path: "comments",
+            populate: [{ path: "reply", populate: [{ path: "reply" }] }],
+        },
+    ];
     postRepository;
     commentRepository;
     notificationRepository;
@@ -15,6 +25,24 @@ class PostService {
         this.commentRepository = new repository_1.CommentRepository();
         this.notificationRepository = new repository_1.NotificationRepository();
         this.storyRepository = new repository_1.StoryRepository();
+    }
+    async postList(args, user) {
+        const posts = await this.postRepository.find({
+            filter: { deletedAt: null },
+            options: {
+                lean: true,
+                populate: this.populate,
+                sort: {
+                    createdAt: -1,
+                },
+            },
+        });
+        return {
+            docs: posts,
+            currentPage: 1,
+            pages: 1,
+            size: posts.length,
+        };
     }
     async createPost(data, user) {
         const payload = {
@@ -196,6 +224,24 @@ class PostService {
             activeStories,
         };
     }
+    reactPost = async (args, user) => {
+        const updatedPost = await this.postRepository.updateOne({
+            filter: { _id: args.postID },
+            update: {
+                $push: {
+                    reactions: {
+                        emoji: args.react,
+                        userId: user._id,
+                    },
+                    populate: this.populate,
+                },
+            },
+        });
+        if (!updatedPost) {
+            throw new exceptions_1.BadRequestException("Failed to react to post");
+        }
+        return updatedPost;
+    };
 }
 exports.PostService = PostService;
 exports.default = new PostService();

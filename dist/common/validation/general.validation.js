@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generalValidation = void 0;
+exports.paginationValidationSchema = exports.generalValidation = void 0;
 const mongoose_1 = require("mongoose");
 const zod_1 = require("zod");
 exports.generalValidation = {
@@ -29,5 +29,12 @@ exports.generalValidation = {
     otp: zod_1.z.string().regex(/^\d{6}$/),
     id: zod_1.z.string().refine((value) => mongoose_1.Types.ObjectId.isValid(value), {
         message: "Invalid ObjectId format",
+    }),
+};
+exports.paginationValidationSchema = {
+    query: zod_1.z.strictObject({
+        page: zod_1.z.coerce.number().optional(),
+        size: zod_1.z.coerce.number().optional(),
+        search: zod_1.z.string().optional(),
     }),
 };
