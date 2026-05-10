@@ -4,3 +4,4 @@ export * from "./post";
 export * from "./comment";
 export * from "./story";
 export * from "./notification";
+export * from "./graphql";

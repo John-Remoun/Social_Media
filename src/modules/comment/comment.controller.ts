@@ -1,6 +1,7 @@
-import { NextFunction, Request, Response, Router } from "express";
+import { NextFunction, Response, Router } from "express";
 import { authentication, validation } from "../../middleware";
 import { successResponse } from "../../common/response";
+import { IAuthenticatedRequest } from "../../common/types/express.types";
 import commentService from "./comment.service";
 import * as validators from "./comment.validation";
 
@@ -10,7 +11,7 @@ router.post(
   "/",
   authentication(),
   validation(validators.createCommentSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: IAuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data = await commentService.createComment(req.body, req.user);
       return successResponse({
@@ -29,7 +30,7 @@ router.get(
   "/post/:postId",
   authentication(),
   validation(validators.listPostCommentsSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: IAuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data = await commentService.listPostComments(
         String(req.params.postId),
@@ -45,7 +46,7 @@ router.get(
   "/:id",
   authentication(),
   validation(validators.getCommentSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: IAuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data = await commentService.getCommentById(String(req.params.id));
       return successResponse({ res, data });
@@ -59,7 +60,7 @@ router.patch(
   "/:id",
   authentication(),
   validation(validators.updateCommentSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: IAuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data = await commentService.updateComment(
         String(req.params.id),
@@ -81,7 +82,7 @@ router.delete(
   "/:id",
   authentication(),
   validation(validators.deleteCommentSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: IAuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       await commentService.deleteComment(String(req.params.id), req.user);
       return successResponse({
@@ -98,7 +99,7 @@ router.post(
   "/:id/react",
   authentication(),
   validation(validators.reactCommentSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: IAuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data = await commentService.reaction(
         String(req.params.id),
@@ -120,7 +121,7 @@ router.post(
   "/:id/reply",
   authentication(),
   validation(validators.replyCommentSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: IAuthenticatedRequest, res: Response, next: NextFunction) => {
     try {
       const data = await commentService.replyToComment(
         String(req.params.id),

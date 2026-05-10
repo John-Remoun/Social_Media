@@ -3,8 +3,13 @@ import { IUser } from "../interface";
 import { JwtPayload } from "jsonwebtoken";
 
 declare module "express-serve-static-core" {
-    interface Request {
-        user: HydratedDocument<IUser>;
-        decoded: JwtPayload;
-    }
+  interface Request {
+    user: HydratedDocument<IUser>;
+    decoded: JwtPayload;
+  }
+}
+
+export interface IAuthUser {
+  user: HydratedDocument<IUser>;
+  decoded: JwtPayload;
 }

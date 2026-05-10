@@ -67,6 +67,7 @@ router.get(
 router.get(
   "/",
   authentication(),
+
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = await postService.listPosts();
@@ -149,10 +150,7 @@ router.post(
   validation(validators.likePostSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const data = await postService.Like(
-        String(req.params.id),
-        req.user,
-      );
+      const data = await postService.Like(String(req.params.id), req.user);
       return successResponse({
         res,
         message: data.likes?.length

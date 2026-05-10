@@ -1,6 +1,7 @@
 import type { Response, Request, NextFunction } from "express";
-import { BadRequestException } from "../common/exceptions";
-import { ZodError, ZodType } from "zod";
+import { BadRequestException, MapGraphQLError } from "../common/exceptions";
+import {  ZodError, ZodType } from "zod";
+
 
 
 type KeyReqType = keyof Request;
@@ -40,4 +41,32 @@ export const validation = (schema: SchemaType) => {
 
     next();
   };
+};
+
+
+
+
+
+export const GQLValidation = async <T>(
+  schema: ZodType,
+  args: T
+): Promise<boolean> => {
+
+  const validationResult = schema.safeParse(args);
+
+  if (!validationResult.success) {
+
+    throw MapGraphQLError(
+      new BadRequestException("Validation Error", {
+        issues: validationResult.error.issues.map((issue) => {
+          return {
+            path: issue.path,
+            message: issue.message,
+          };
+        }),
+      })
+    );
+  }
+
+  return true;
 };

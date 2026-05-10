@@ -1,4 +1,4 @@
-import { HydratedDocument, Types } from "mongoose";
+import { HydratedDocument, PopulateOptions, Types } from "mongoose";
 import { IPost, IUser } from "../../common/interface";
 import { AvailabilityEnum } from "../../common/Enums";
 import {
@@ -13,8 +13,22 @@ import {
   StoryRepository,
 } from "../../DB/repository";
 import { CreatePostDto, UpdatePostDto } from "./post.dto";
+import { IAuthUser } from "../../common/types/express.types";
+import { PaginateDto } from "../../common/validation";
+import { ReactOnPostArgsDto } from "./post.dto";
 
 export class PostService {
+  private populate: PopulateOptions[] = [
+    { path: "likes" },
+    { path: "createdBy" },
+    { path: "Tags" },
+    { path: "updatedBy" },
+    {
+      path: "comments",
+      populate: [{ path: "reply", populate: [{ path: "reply" }] }],
+    },
+  ];
+
   private readonly postRepository: PostRepository;
   private readonly commentRepository: CommentRepository;
   private readonly notificationRepository: NotificationRepository;
@@ -26,7 +40,29 @@ export class PostService {
     this.notificationRepository = new NotificationRepository();
     this.storyRepository = new StoryRepository();
   }
+  async postList(args: PaginateDto, user: IAuthUser["user"]) {
+    const posts = await this.postRepository.find({
+      filter: { deletedAt: null },
 
+      options: {
+        lean: true,
+        populate: this.populate,
+        sort: {
+          createdAt: -1,
+        },
+      },
+    });
+
+    return {
+      docs: posts,
+
+      currentPage: 1,
+
+      pages: 1,
+
+      size: posts.length,
+    };
+  }
   async createPost(
     data: CreatePostDto,
     user: HydratedDocument<IUser>,
@@ -265,6 +301,26 @@ export class PostService {
       activeStories,
     };
   }
+  reactPost = async (args: ReactOnPostArgsDto, user: IAuthUser["user"]) => {
+    const updatedPost = await this.postRepository.updateOne({
+      filter: { _id: args.postID },
+      update: {
+        $push: {
+          reactions: {
+            emoji: args.react,
+            userId: user._id,
+          },
+          populate: this.populate,
+        },
+      },
+    });
+
+    if (!updatedPost) {
+      throw new BadRequestException("Failed to react to post");
+    }
+
+    return updatedPost;
+  };
 }
 
 export default new PostService();

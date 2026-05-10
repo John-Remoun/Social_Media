@@ -20,6 +20,7 @@ import {
   ConflictException,
 } from "../../common/exceptions";
 import { ACCESS_EXPIRES_IN, REFRESH_EXPIRES_IN } from "../../config/config";
+import { UserRepository } from "../../DB/repository";
 
 const writePipeLine = promisify(pipeline);
 
@@ -27,17 +28,29 @@ export class UserService {
   private readonly redis: RedisService;
   private readonly tokens: tokenService;
   private readonly s3: S3Service;
-
+  private userRepository: UserRepository;
   constructor() {
     this.redis = redisService;
     this.tokens = new tokenService();
     this.s3 = s3Service;
+    this.userRepository = new UserRepository();
   }
 
   // ─── PROFILE ───────────────────────────────────────────────────────────────
+  async profile(userId: string): Promise<IUser> {
+    const data = (await this.userRepository.findOne({
+      filter: {
+        _id: userId,
+      },
 
-  async profile(user: HydratedDocument<IUser>): Promise<any> {
-    return user.toJSON();
+      options: {
+        populate: [{ path: "friends" }],
+      },
+    })) as HydratedDocument<IUser>;
+    if (!data) {
+      throw new BadRequestException("User not found");
+    }
+    return data.toJSON();
   }
 
   // ─── PROFILE IMAGE (pre-signed upload) ────────────────────────────────────

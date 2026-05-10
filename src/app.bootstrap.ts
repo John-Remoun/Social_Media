@@ -7,18 +7,27 @@ import {
   commentRouter,
   storyRouter,
   notificationRouter,
+  schema,
 } from "./modules";
-import { globalErrorHandler } from "./middleware";
+import { authentication, globalErrorHandler } from "./middleware";
 import { port } from "./config/config";
 import connectDB from "./DB/connction.db";
 import { redisService } from "./common/services";
 import cors from "cors";
+import { createHandler } from "graphql-http/lib/use/express";
+
 
 const bootstrap = async (): Promise<void> => {
   const app: Express = express();
 
   app.use(express.json(), cors());
 
+  app.all(
+    "/graphql",authentication(),
+    createHandler({
+      schema:schema,context:(req)=>({user:req.raw.user,decoded:req.raw.decoded})
+    }),
+    );
   //   Application-Routing
   app.use("/auth", authRouter);
   app.use("/user", userRouter);

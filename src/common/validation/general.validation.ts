@@ -29,3 +29,20 @@ export const generalValidation = {
     message: "Invalid ObjectId format",
   }),
 };
+export const paginationValidationSchema = {
+
+  query: z.strictObject({
+
+    page: z.coerce.number().optional(),
+
+    size: z.coerce.number().optional(),
+
+    search: z.string().optional(),
+
+  }),
+
+};
+
+export type PaginateDto = z.infer<
+  typeof paginationValidationSchema.query
+>;
