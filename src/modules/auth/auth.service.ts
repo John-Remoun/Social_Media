@@ -24,26 +24,24 @@ import {
   RedisService,
 } from "../../common/services/redis.service";
 import { EmailEnum, ProviderEnum } from "../../common/Enums";
-import { NotificationService, tokenService } from "../../common/services";
+import { NotificationService, TokenService } from "../../common/services";
 import { IUser } from "../../common/interface";
 import { ILoginResponse } from "./auth.entity";
 import { OAuth2Client, TokenPayload } from "google-auth-library";
 import { CLIENT_IDS } from "../../config/config";
-
-/* ================= TYPES ================= */
 
 /* ================= SERVICE ================= */
 
 export class AuthenticationService {
   private readonly userRepository: UserRepository;
   private readonly redis: RedisService;
-  private readonly tokens: tokenService;
+  private readonly tokens: TokenService;
   private readonly notification: NotificationService;
 
   constructor() {
     this.userRepository = new UserRepository();
     this.redis = redisService;
-    this.tokens = new tokenService();
+    this.tokens = new TokenService();
     this.notification = new NotificationService();
   }
 

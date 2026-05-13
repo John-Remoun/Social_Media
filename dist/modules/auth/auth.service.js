@@ -17,7 +17,7 @@ class AuthenticationService {
     constructor() {
         this.userRepository = new repository_1.UserRepository();
         this.redis = redis_service_1.redisService;
-        this.tokens = new services_1.tokenService();
+        this.tokens = new services_1.TokenService();
         this.notification = new services_1.NotificationService();
     }
     async login(inputs, issuer) {

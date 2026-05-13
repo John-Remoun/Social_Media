@@ -7,7 +7,7 @@ const express_1 = __importDefault(require("express"));
 const modules_1 = require("./modules");
 const middleware_1 = require("./middleware");
 const config_1 = require("./config/config");
-const connction_db_1 = __importDefault(require("./DB/connction.db"));
+const connection_db_1 = __importDefault(require("./DB/connection.db"));
 const services_1 = require("./common/services");
 const cors_1 = __importDefault(require("cors"));
 const express_2 = require("graphql-http/lib/use/express");
@@ -15,7 +15,8 @@ const bootstrap = async () => {
     const app = (0, express_1.default)();
     app.use(express_1.default.json(), (0, cors_1.default)());
     app.all("/graphql", (0, middleware_1.authentication)(), (0, express_2.createHandler)({
-        schema: modules_1.schema, context: (req) => ({ user: req.raw.user, decoded: req.raw.decoded })
+        schema: modules_1.schema,
+        context: (req) => ({ user: req.raw.user, decoded: req.raw.decoded }),
     }));
     app.use("/auth", modules_1.authRouter);
     app.use("/user", modules_1.userRouter);
@@ -30,11 +31,12 @@ const bootstrap = async () => {
     app.get("/*dummy", (req, res, next) => {
         res.status(404).json({ message: "Invalid application routing" });
     });
-    await (0, connction_db_1.default)();
+    await (0, connection_db_1.default)();
     await services_1.redisService.connect();
-    app.listen(config_1.port, () => {
+    const httpServer = app.listen(config_1.port, () => {
         console.log(`Server is running on port ${config_1.port} 🚀`);
     });
+    await modules_1.realtimeGateway.initializeIo(httpServer);
     console.log("App bootstrap is running 🏃");
 };
 exports.default = bootstrap;

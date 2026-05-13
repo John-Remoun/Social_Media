@@ -8,14 +8,14 @@ import {
   storyRouter,
   notificationRouter,
   schema,
+  realtimeGateway,
 } from "./modules";
 import { authentication, globalErrorHandler } from "./middleware";
 import { port } from "./config/config";
-import connectDB from "./DB/connction.db";
+import connectDB from "./DB/connection.db";
 import { redisService } from "./common/services";
 import cors from "cors";
 import { createHandler } from "graphql-http/lib/use/express";
-
 
 const bootstrap = async (): Promise<void> => {
   const app: Express = express();
@@ -23,11 +23,13 @@ const bootstrap = async (): Promise<void> => {
   app.use(express.json(), cors());
 
   app.all(
-    "/graphql",authentication(),
+    "/graphql",
+    authentication(),
     createHandler({
-      schema:schema,context:(req)=>({user:req.raw.user,decoded:req.raw.decoded})
+      schema: schema,
+      context: (req) => ({ user: req.raw.user, decoded: req.raw.decoded }),
     }),
-    );
+  );
   //   Application-Routing
   app.use("/auth", authRouter);
   app.use("/user", userRouter);
@@ -56,9 +58,12 @@ const bootstrap = async (): Promise<void> => {
   await redisService.connect();
 
   //   Server
-  app.listen(port, () => {
+  const httpServer = app.listen(port, () => {
     console.log(`Server is running on port ${port} 🚀`);
   });
+
+  //   Initialize Socket.io
+  await realtimeGateway.initializeIo(httpServer);
 
   console.log("App bootstrap is running 🏃");
 };

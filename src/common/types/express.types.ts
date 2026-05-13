@@ -1,6 +1,7 @@
 import { HydratedDocument } from "mongoose";
 import { IUser } from "../interface";
 import { JwtPayload } from "jsonwebtoken";
+import { Socket } from "socket.io";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -12,4 +13,7 @@ declare module "express-serve-static-core" {
 export interface IAuthUser {
   user: HydratedDocument<IUser>;
   decoded: JwtPayload;
+}
+export interface IAuthSocket extends Socket {
+  data : IAuthUser;
 }

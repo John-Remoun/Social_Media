@@ -1,8 +1,6 @@
 import type { Response, Request, NextFunction } from "express";
 import { BadRequestException, MapGraphQLError } from "../common/exceptions";
-import {  ZodError, ZodType } from "zod";
-
-
+import { ZodError, ZodType } from "zod";
 
 type KeyReqType = keyof Request;
 type SchemaType = Partial<Record<KeyReqType, ZodType>>;
@@ -10,7 +8,7 @@ type IssuesType = Array<{
   key: KeyReqType;
   issues: Array<{
     message: string;
-    path: Array <(string | number | Symbol | null | undefined)>;
+    path: Array<string | number | Symbol | null | undefined>;
   }>;
 }>;
 
@@ -43,19 +41,13 @@ export const validation = (schema: SchemaType) => {
   };
 };
 
-
-
-
-
 export const GQLValidation = async <T>(
   schema: ZodType,
-  args: T
+  args: T,
 ): Promise<boolean> => {
-
   const validationResult = schema.safeParse(args);
 
   if (!validationResult.success) {
-
     throw MapGraphQLError(
       new BadRequestException("Validation Error", {
         issues: validationResult.error.issues.map((issue) => {
@@ -64,8 +56,28 @@ export const GQLValidation = async <T>(
             message: issue.message,
           };
         }),
-      })
+      }),
     );
+  }
+
+  return true;
+};
+
+export const socketValidation = async <T>(
+  schema: ZodType,
+  args: T,
+): Promise<boolean> => {
+  const validationResult = schema.safeParse(args);
+
+  if (!validationResult.success) {
+    throw new BadRequestException("Validation Error", {
+      issues: validationResult.error.issues.map((issue) => {
+        return {
+          path: issue.path,
+          message: issue.message,
+        };
+      }),
+    });
   }
 
   return true;

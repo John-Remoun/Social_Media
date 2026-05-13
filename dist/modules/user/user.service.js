@@ -16,7 +16,7 @@ class UserService {
     userRepository;
     constructor() {
         this.redis = services_1.redisService;
-        this.tokens = new services_1.tokenService();
+        this.tokens = new services_1.TokenService();
         this.s3 = services_1.s3Service;
         this.userRepository = new repository_1.UserRepository();
     }

@@ -13,7 +13,7 @@ import {
   RedisService,
   s3Service,
   S3Service,
-  tokenService,
+  TokenService,
 } from "../../common/services";
 import {
   BadRequestException,
@@ -26,12 +26,12 @@ const writePipeLine = promisify(pipeline);
 
 export class UserService {
   private readonly redis: RedisService;
-  private readonly tokens: tokenService;
+  private readonly tokens: TokenService;
   private readonly s3: S3Service;
   private userRepository: UserRepository;
   constructor() {
     this.redis = redisService;
-    this.tokens = new tokenService();
+    this.tokens = new TokenService();
     this.s3 = s3Service;
     this.userRepository = new UserRepository();
   }

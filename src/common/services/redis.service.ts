@@ -7,6 +7,7 @@ import { sendEmail } from "../utils/email/send.email";
 import { emailTemplate } from "../utils/email/template.email";
 import { generateHash } from "../utils/security/hash.security";
 
+
 const createRandomOtp = (): number =>
   Math.floor(100000 + Math.random() * 900000);
 
@@ -44,6 +45,7 @@ export class RedisService {
   async connect(): Promise<void> {
     if (!this.client.isOpen) await this.client.connect();
   }
+  
   getClient(): RedisClientType {
     return this.client;
   }
@@ -278,6 +280,30 @@ export class RedisService {
 
   async removeFCMUser(userId: Types.ObjectId | string) {
     return await this.client.del(this.FCM_key(userId));
+  }
+
+
+  socketKey(userId: Types.ObjectId | string) {
+    return `user:sockets:${userId}`;
+  }
+  async addSocket(userId: Types.ObjectId | string, socketId: string) {
+    return await this.client.sAdd(this.socketKey(userId), socketId);
+  }
+
+  async removeSocket(userId: Types.ObjectId | string, socketId: string) {
+    return await this.client.sRem(this.socketKey(userId), socketId);
+  }
+
+  async getSockets(userId: Types.ObjectId | string) {
+    return await this.client.sMembers(this.socketKey(userId));
+  }
+
+  async hasSockets(userId: Types.ObjectId | string) {
+    return await this.client.sCard(this.socketKey(userId));
+  }
+
+  async removeUser(userId: Types.ObjectId | string) {
+    return await this.client.del(this.socketKey(userId));
   }
 }
 

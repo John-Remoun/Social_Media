@@ -29,7 +29,11 @@ type decodeType = {
   tokenType: tokenTypeEnum;
 };
 
-export class tokenService {
+export class TokenService {
+  static tokenTypeEnum: any;
+  static decodeToken(arg0: { token: any; tokenType: any; }): { user: any; decoded: any; } | PromiseLike<{ user: any; decoded: any; }> {
+    throw new Error("Method not implemented.");
+  }
   private readonly userRepository: UserRepository;
   private readonly redis: RedisService;
 
