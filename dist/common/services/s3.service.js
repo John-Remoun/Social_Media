@@ -23,14 +23,12 @@ class S3Service {
             },
         });
     }
-    async uploadFile({ storageApproach = Enums_1.StorageApproachEnum.MEMORY, Bucket = config_1.S3_BUCKET_NAME, path = "general", ACL = client_s3_1.ObjectCannedACL.private, file, ContentType, }) {
+    async uploadFile(file, path, ContentType) {
         const command = new client_s3_1.PutObjectCommand({
-            Bucket,
+            Bucket: config_1.S3_BUCKET_NAME,
             Key: `${config_1.APPLICATION_NAME}/${path}/${(0, crypto_1.randomUUID)()}__${file.originalname}`,
-            ACL,
-            Body: storageApproach === Enums_1.StorageApproachEnum.MEMORY
-                ? file.buffer
-                : (0, fs_1.createReadStream)(file.path),
+            ACL: client_s3_1.ObjectCannedACL.private,
+            Body: file.buffer,
             ContentType: file.mimetype || ContentType,
         });
         await this.client.send(command);
@@ -63,8 +61,14 @@ class S3Service {
     }
     async uploadFiles({ storageApproach = Enums_1.StorageApproachEnum.MEMORY, uploadApproach = Enums_1.UploadApproachEnum.LARGE, Bucket = config_1.S3_BUCKET_NAME, path = "general", ACL = client_s3_1.ObjectCannedACL.private, files, }) {
         const uploadFn = uploadApproach === Enums_1.UploadApproachEnum.LARGE
-            ? (file) => this.uploadLargeFile({ storageApproach, Bucket, path, ACL, file })
-            : (file) => this.uploadFile({ storageApproach, Bucket, path, ACL, file });
+            ? (f) => this.uploadLargeFile({
+                storageApproach,
+                Bucket,
+                path,
+                ACL,
+                file: f,
+            })
+            : (f) => this.uploadFile(f, path);
         return Promise.all(files.map(uploadFn));
     }
     async getFile({ Bucket = config_1.S3_BUCKET_NAME, Key, }) {

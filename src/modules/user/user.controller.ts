@@ -11,8 +11,10 @@ import { endpoint } from "./user.authorization";
 import { StorageApproachEnum, tokenTypeEnum } from "../../common/Enums";
 import { cloudFileUpload, fileValidation } from "../../common/utils/multer";
 import { IUser } from "../../common/interface";
+import { chatRouter } from "../chat";
 
 const router = Router();
+router.use("/:userId/chat", chatRouter);
 
 // ─── GET /profile ─────────────────────────────────────────────────────────────
 router.get(
@@ -20,7 +22,7 @@ router.get(
   authentication(),
   authorization(endpoint.profile),
   async (req: Request, res: Response, next: NextFunction) => {
-    const data = await userService.profile(req.user);
+    const data = await userService.profile(req.user._id.toString()); // or req.user.id
     return successResponse({ res, data });
   },
 );

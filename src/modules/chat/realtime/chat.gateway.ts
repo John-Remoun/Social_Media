@@ -1,18 +1,20 @@
 import { Server } from "socket.io";
-
-import { chatEvent, ChatEvent } from "./chat.event";
 import { IAuthSocket } from "../../../common/types/express.types";
+import { chatEvent, ChatEvent } from "./chat.event";
 
 export class ChatGateway {
-    private chatEvent: ChatEvent;
-    
-    constructor() {
-        this.chatEvent = chatEvent;
-    }
+  private chatEvent: ChatEvent;
 
-    registerEvents = (socket: IAuthSocket, io: Server) => {
-        this.chatEvent.sayHi(socket);
-    }
+  constructor() {
+    this.chatEvent = chatEvent;
+  }
+
+  registerEvents = (socket: IAuthSocket, io: Server) => {
+    this.chatEvent.sayHi(socket);
+    this.chatEvent.sendMessage(socket, io);
+    this.chatEvent.joinGroupRoom(socket);
+    this.chatEvent.sendGroupMessage(socket, io);
+  };
 }
 
 export const chatGateway = new ChatGateway();

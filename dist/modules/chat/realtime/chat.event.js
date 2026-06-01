@@ -37,10 +37,13 @@ exports.chatEvent = exports.ChatEvent = void 0;
 const middleware_1 = require("../../../middleware");
 const chat_service_1 = require("../chat.service");
 const validators = __importStar(require("../chat.validation"));
+const services_1 = require("../../../common/services");
 class ChatEvent {
+    redisService;
     chatService;
     constructor() {
         this.chatService = new chat_service_1.ChatService();
+        this.redisService = new services_1.RedisService();
     }
     sayHi = (socket) => {
         return socket.on("sayHi", async (data) => {
@@ -52,6 +55,63 @@ class ChatEvent {
             }
             catch (error) {
                 socket.emit("An error occurred", error);
+            }
+        });
+    };
+    sendMessage = (socket, io) => {
+        return socket.on("sendMessage", async ({ content, sendTo }) => {
+            try {
+                console.log({ content, sendTo });
+                await this.chatService.sendMessage({ content, sendTo }, socket.data.user);
+                io.to(await this.redisService.getSockets(socket.data.user._id.toString())).emit("successMessage", {
+                    content,
+                    from: socket.data.user._id.toString(),
+                });
+                const receiversSocketIds = await this.redisService.getSockets(sendTo);
+                if (receiversSocketIds.length > 0) {
+                    socket
+                        .to(receiversSocketIds)
+                        .emit("newMessage", { content, sendTo });
+                }
+            }
+            catch (error) {
+                console.log({ error });
+                socket.emit("custom_error", error);
+            }
+        });
+    };
+    joinGroupRoom = (socket) => {
+        return socket.on("joinGroupRoom", async ({ roomId }) => {
+            try {
+                await (0, middleware_1.socketValidation)(validators.joinGroupRoom, {
+                    roomId,
+                });
+                await this.chatService.joinGroupRoom(roomId, socket.data.user);
+                const roomName = `group:${roomId}`;
+                socket.join(roomName);
+                socket.emit("joinedGroupRoom", { roomId });
+            }
+            catch (error) {
+                console.log({ error });
+                socket.emit("custom_error", error);
+            }
+        });
+    };
+    sendGroupMessage = (socket, io) => {
+        return socket.on("sendGroupMessage", async ({ roomId, content }) => {
+            try {
+                await (0, middleware_1.socketValidation)(validators.sendGroupMessage, { roomId, content });
+                await this.chatService.sendGroupMessage({ roomId, content }, socket.data.user);
+                const roomName = `group:${roomId}`;
+                io.to(roomName).emit("newGroupMessage", {
+                    roomId,
+                    content,
+                    from: socket.data.user._id.toString(),
+                });
+            }
+            catch (error) {
+                console.log({ error });
+                socket.emit("custom_error", error);
             }
         });
     };

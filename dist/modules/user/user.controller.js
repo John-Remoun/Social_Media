@@ -10,9 +10,11 @@ const middleware_1 = require("../../middleware");
 const user_authorization_1 = require("./user.authorization");
 const Enums_1 = require("../../common/Enums");
 const multer_1 = require("../../common/utils/multer");
+const chat_1 = require("../chat");
 const router = (0, express_1.Router)();
+router.use("/:userId/chat", chat_1.chatRouter);
 router.get("/profile", (0, middleware_1.authentication)(), (0, middleware_1.authorization)(user_authorization_1.endpoint.profile), async (req, res, next) => {
-    const data = await user_service_1.default.profile(req.user);
+    const data = await user_service_1.default.profile(req.user._id.toString());
     return (0, response_1.successResponse)({ res, data });
 });
 router.post("/logout", (0, middleware_1.authentication)(), async (req, res, next) => {

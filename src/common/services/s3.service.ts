@@ -42,29 +42,16 @@ export class S3Service {
     });
   }
 
-  async uploadFile({
-    storageApproach = StorageApproachEnum.MEMORY,
-    Bucket = S3_BUCKET_NAME,
-    path = "general",
-    ACL = ObjectCannedACL.private,
-    file,
-    ContentType,
-  }: {
-    storageApproach?: StorageApproachEnum;
-    Bucket?: string;
-    path?: string;
-    file: Express.Multer.File;
-    ACL?: ObjectCannedACL;
-    ContentType?: string;
-  }): Promise<string> {
+  async uploadFile(
+    file: Express.Multer.File,
+    path: string,
+    ContentType?: string,
+  ): Promise<string> {
     const command = new PutObjectCommand({
-      Bucket,
+      Bucket: S3_BUCKET_NAME,
       Key: `${APPLICATION_NAME}/${path}/${randomUUID()}__${file.originalname}`,
-      ACL,
-      Body:
-        storageApproach === StorageApproachEnum.MEMORY
-          ? file.buffer
-          : createReadStream(file.path),
+      ACL: ObjectCannedACL.private,
+      Body: file.buffer,
       ContentType: file.mimetype || ContentType,
     });
 
@@ -74,7 +61,7 @@ export class S3Service {
       throw new BadRequestException("Fail to upload this file");
     }
 
-    return command.input.Key;
+    return command.input.Key as string;
   }
 
   async uploadLargeFile({
@@ -108,7 +95,7 @@ export class S3Service {
 
     upload.on("httpUploadProgress", (progress) => {
       console.log(
-        `Uploaded file progress: ${progress.loaded}/${progress.total} bytes`
+        `Uploaded file progress: ${progress.loaded}/${progress.total} bytes`,
       );
     });
 
@@ -138,14 +125,18 @@ export class S3Service {
   }): Promise<string[]> {
     const uploadFn =
       uploadApproach === UploadApproachEnum.LARGE
-        ? (file: Express.Multer.File) =>
-            this.uploadLargeFile({ storageApproach, Bucket, path, ACL, file })
-        : (file: Express.Multer.File) =>
-            this.uploadFile({ storageApproach, Bucket, path, ACL, file });
+        ? (f: Express.Multer.File) =>
+            this.uploadLargeFile({
+              storageApproach,
+              Bucket,
+              path,
+              ACL,
+              file: f,
+            })
+        : (f: Express.Multer.File) => this.uploadFile(f, path);
 
     return Promise.all(files.map(uploadFn));
   }
-
 
   async getFile({
     Bucket = S3_BUCKET_NAME,
@@ -218,7 +209,7 @@ export class S3Service {
 
     if (!objects.Contents?.length) {
       throw new BadRequestException(
-        `No objects found under folder: ${folderKey}`
+        `No objects found under folder: ${folderKey}`,
       );
     }
 

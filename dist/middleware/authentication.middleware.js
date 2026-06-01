@@ -6,19 +6,19 @@ const services_1 = require("../common/services");
 const Enums_1 = require("../common/Enums");
 const authentication = (tokenType = Enums_1.tokenTypeEnum.ACCESS) => {
     return async (req, res, next) => {
-        const Service = new services_1.tokenService();
+        const Service = new services_1.TokenService();
         const [key, credential] = req.headers.authorization?.split(" ") || [];
         console.log({ key, credential });
         if (!key || !credential) {
-            throw new exceptions_1.UnauthorizedException('Missing authorization');
+            throw new exceptions_1.UnauthorizedException("Missing authorization");
         }
         switch (key) {
-            case 'Basic':
+            case "Basic":
                 break;
             default:
                 const { decode, user } = await Service.decodeToken({
                     token: credential,
-                    tokenType
+                    tokenType,
                 });
                 req.user = user;
                 req.decoded = decode;
